@@ -1,6 +1,6 @@
 # CMake entry point
 cmake_minimum_required (VERSION 2.6)
-project (test)
+project (edge-detector)
 
 #find_package(OpenGL REQUIRED)
 
@@ -35,7 +35,10 @@ endif()
 # Compile external dependencies 
 #add_subdirectory (external)
 
-cmake_policy(SET CMP0026 OLD)
+if(POLICY CMP0026)
+    cmake_policy(SET CMP0026 OLD)
+endif()
+
 #list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/external/rpavlik-cmake-modules-fe2273")
 #include(CreateLaunchers)
 #include(MSVCMultipleProcessCompile) # /MP
@@ -60,16 +63,13 @@ include_directories(
 #    ${Qt5Widgets_DEFINITIONS}
 #)
 
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
-#qt5_generate_moc(include/mainwindow.hpp moc_mainwindow.cpp)
-
-add_executable(test
+add_executable(edge-detector
     src/main.cpp
 )
 
-target_link_libraries(test
+target_link_libraries(edge-detector
     ${ALL_LIBS}
 )
 
