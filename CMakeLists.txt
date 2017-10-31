@@ -2,25 +2,21 @@
 cmake_minimum_required (VERSION 2.6)
 project (edge-detector)
 
-#find_package(OpenGL REQUIRED)
+find_package(OpenMP REQUIRED)
+if (OPENMP_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+endif()
 
-# q5 instruction
-# Find the Qt5Core library
-# example of CMAKE_MODULE_PATH
-# set(CMAKE_MODULE_PATH "D:\\Programs\\Qt5.7.0\\5.7\\msvc2015_64\\lib\\cmake\\Qt5Core\\")
-# example of CMAKE_PREFIX_PATH
-# set(CMAKE_PREFIX_PATH "D:\\Programs\\Qt5.7.0\\5.7\\msvc2015_64\\")
-#set(CMAKE_PREFIX_PATH $ENV{CMAKE_PREFIX_PATH})
-# Instruct CMake to run moc automatically when needed.
-#set(CMAKE_AUTOMOC ON)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-#find_package(Qt5Widgets)
 
 message( "CMAKE_MODULE_PATH: ${CMAKE_MODULE_PATH}" )
 message( "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}" )
 message( "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}" )
 message( "CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}" )
-#message( "_qt5Widgets_install_prefix: ${_qt5Widgets_install_prefix}" )
 
 if( CMAKE_BINARY_DIR STREQUAL CMAKE_SOURCE_DIR )
     message( FATAL_ERROR "Please select another Build Directory." )
@@ -63,9 +59,10 @@ include_directories(
 #    ${Qt5Widgets_DEFINITIONS}
 #)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
 add_executable(edge-detector
+    src/utils.cpp
     src/main.cpp
 )
 
