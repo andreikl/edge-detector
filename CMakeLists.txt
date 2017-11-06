@@ -41,7 +41,7 @@ endif()
 
 
 include_directories(
-     Streams/source
+     src
 )
 
 #set(ALL_LIBS
@@ -59,7 +59,7 @@ include_directories(
 #    ${Qt5Widgets_DEFINITIONS}
 #)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
 add_executable(edge-detector
     src/utils.cpp
