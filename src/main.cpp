@@ -18,6 +18,7 @@
 using namespace std;
 
 typedef unsigned char pixel_t;
+typedef short derivatives_t;
 
 #define MAX_BRIGHTNESS 255
 
@@ -48,6 +49,14 @@ const string DERIVATIVES_X_OUTPUT("-dx");
 const string DERIVATIVES_X_OUTPUT_DEF = "null";
 const string DERIVATIVES_Y_OUTPUT("-dy");
 const string DERIVATIVES_Y_OUTPUT_DEF = "null";
+const string DERIVATIVES_XY_OUTPUT("-dxy");
+const string DERIVATIVES_XY_OUTPUT_DEF = "null";
+const string SUPPRESSION_OUTPUT("-nms");
+const string SUPPRESSION_OUTPUT_DEF = "null";
+const string HYSTERESIS_MIN = "-hmi";
+const int HYSTERESIS_MIN_DEF = 45;
+const string HYSTERESIS_MAX = "-hma";
+const int HYSTERESIS_MAX_DEF = 50;
 
 map <string, string> argmap;
 
@@ -55,6 +64,8 @@ bool isDebug = false;
 
 string derivatives_x_output;
 string derivatives_y_output;
+string derivatives_xy_output;
+string suppression_output;
 string gaussian_output;
 string output;
 
@@ -106,13 +117,17 @@ void printHelp() {
     cout << GAUSSIAN_OUTPUT << ": gaussian output, default: " << GAUSSIAN_OUTPUT_DEF << ", null: void output" << endl;
     cout << DERIVATIVES_X_OUTPUT << ": derivatives x output, default: " << DERIVATIVES_X_OUTPUT_DEF << ", null: void output" << endl;
     cout << DERIVATIVES_Y_OUTPUT << ": derivatives y output, default: " << DERIVATIVES_Y_OUTPUT_DEF << ", null: void output" << endl;
+    cout << DERIVATIVES_XY_OUTPUT << ": derivatives xy output, default: " << DERIVATIVES_XY_OUTPUT_DEF << ", null: void output" << endl;
+    cout << SUPPRESSION_OUTPUT << ": Non-maximum supression output, default: " << SUPPRESSION_OUTPUT_DEF << ", null: void output" << endl;
+    cout << HYSTERESIS_MIN << ": Hysteresis min, default: " << HYSTERESIS_MIN_DEF << endl;
+    cout << HYSTERESIS_MAX << ": Hysteresis max, default: " << HYSTERESIS_MAX_DEF << endl;
     cout << OUTPUT << ": output, default: " << OUTPUT_DEF << ", -: output stream" << endl;
     cout << "-e: testName, default: " << EXAMPLE_MAIN << endl;
     cout << "tests: " << EXAMPLE_MAIN << ", " << EXAMPLE_BOOST << endl;
     exit(0);
 }
 
-void convolution(const pixel_t *in, pixel_t *out, int width, int height, const double *kernel, int kwidth, int kheight) {
+template<typename T_IN, typename T_OUT> void convolution(const T_IN *in, T_OUT *out, int width, int height, const double *kernel, int kwidth, int kheight) {
     int kwidthhalf = kwidth / 2;
     int kwidthmodulo = kwidth % 2;
     int kheighthalf = kheight / 2;
@@ -138,16 +153,23 @@ void convolution(const pixel_t *in, pixel_t *out, int width, int height, const d
             for (int ii = -kheighthalf; ii < kheighthalf + kheightmodulo; ii++) { //rows
                 for (int jj = -kwidthhalf; jj < kwidthhalf + kwidthmodulo; jj++) { //columns
                     pixel += in[(i - ii) * width + j - jj] * kernel[c];
-
-                    if (isDebug && i == 5 && j == 5) {
+                    /*if (isDebug && i == 20 && j == 91) {
                         int index = (i - ii) * width + j - jj;
                         cerr << "kernel i: " << kernel[c] << endl;
-                        cerr << "image [row, column]: [" << index / width << ", " << index % width << "]" << endl;
+                        cerr << "image [row, column]: [" << index / width << ", " << index % width << "] " << (int)in[(i - ii) * width + j - jj] << endl;
+                        cerr << "sum: " << pixel << endl;
                     }
+
+                    if (isDebug && i == 20 && j == 25) {
+                        int index = (i - ii) * width + j - jj;
+                        cerr << "kernel i: " << kernel[c] << endl;
+                        cerr << "image [row, column]: [" << index / width << ", " << index % width << "] " << (int)in[(i - ii) * width + j - jj] << endl;
+                        cerr << "sum: " << pixel << endl;
+                    }*/
                     c++;
                 }
             }
-            out[i * width + j] = static_cast<pixel_t>(pixel);
+            out[i * width + j] = static_cast<T_OUT>(pixel);
             //out[i * width + j] = calcConvolution(i, j);
         }
     }
@@ -188,7 +210,7 @@ void gaussian_filter(const pixel_t *in, pixel_t *out, int width, int height, dou
     }
 
     const clock_t gaussian_begin_time = clock();
-    convolution(in, out, width, height, kernel, size, size);
+    convolution<pixel_t, pixel_t>(in, out, width, height, kernel, size, size);
 
     if (isDebug) {
         cerr << "Gaussian filter calculation: " << float(clock () - gaussian_begin_time) /  CLOCKS_PER_SEC << endl;
@@ -247,12 +269,7 @@ void exampleMain(unsigned char tmin, unsigned char tmax) {
     const int frames = readValue(FRAMES, FRAMES_DEF);
 
     pixel_t image[width * height];
-
     pixel_t image_gaussian[width * height];
-    pixel_t image_dx[width * height];
-    pixel_t image_dy[width * height];
-    pixel_t image_dxy[width * height];
-
     pixel_t out[width * height];            
 
     // initialise output stream
@@ -277,22 +294,31 @@ void exampleMain(unsigned char tmin, unsigned char tmax) {
             const clock_t calc_begin_time = clock();
 
             memcpy(image_gaussian, image, width * height * sizeof(pixel_t));
-            gaussian_filter(image, image_gaussian, width, height, 0.9, 5);
+            gaussian_filter(image, image_gaussian, width, height, 0.8, 5);
             //contrast_filter(image_gaussian, width, height);
 
-            const double d[] = {1.0, -1.0};
+            // borders are -0.5 0.5: -128 to 128, -2, 2: -512 to 512
+            //const double dx[] = {-2, 2};
+            //const double dy[] = {2, -2};
+            double dx[] = {-1, 0, 1,
+                           -2, 0, 2,
+                           -1, 0, 1};
+            double dy[] = { 1, 2, 1,
+                            0, 0, 0,
+                           -1,-2,-1};
 
-            memset(image_dx, 0, width * height * sizeof(pixel_t));
-            convolution(image_gaussian, image_dx, width, height, d, 2, 1);
+            derivatives_t image_dx[width * height];
+            memset(image_dx, 0, width * height * sizeof(derivatives_t));
+            convolution<pixel_t, derivatives_t>(image_gaussian, image_dx, width, height, dx, 3, 3);
             const clock_t dx_write_begin_time = clock();
             ostream& dxos = create_output_stream(derivatives_x_output);
 
             //writes ppm image
             dxos << "P6\n" << width << " " << height << "\n255\n";
             for (int i = width * height - 1; i >= 0; i--) {
-                dxos << image_dx[i];
-                dxos << image_dx[i];
-                dxos << image_dx[i];
+                dxos << (unsigned char)(image_dx[i] + 127);
+                dxos << (unsigned char)(image_dx[i] + 127);
+                dxos << (unsigned char)(image_dx[i] + 127);
             }
 
             if (isDebug) {
@@ -301,18 +327,18 @@ void exampleMain(unsigned char tmin, unsigned char tmax) {
 
             delete_output_stream(dxos);
 
-
-            memset(image_dy, 0, width * height * sizeof(pixel_t));
-            convolution(image_gaussian, image_dy, width, height, d, 1, 2);
+            derivatives_t image_dy[width * height];
+            memset(image_dy, 0, width * height * sizeof(derivatives_t));
+            convolution<pixel_t, derivatives_t>(image_gaussian, image_dy, width, height, dy, 3, 3);
             const clock_t dy_write_begin_time = clock();
             ostream& dyos = create_output_stream(derivatives_y_output);
 
             //writes ppm image
             dyos << "P6\n" << width << " " << height << "\n255\n";
             for (int i = width * height - 1; i >= 0; i--) {
-                dyos << image_dy[i];
-                dyos << image_dy[i];
-                dyos << image_dy[i];
+                dyos << (unsigned char)(image_dy[i] + 127);
+                dyos << (unsigned char)(image_dy[i] + 127);
+                dyos << (unsigned char)(image_dy[i] + 127);
             }
 
             if (isDebug) {
@@ -320,18 +346,34 @@ void exampleMain(unsigned char tmin, unsigned char tmax) {
             }
 
             delete_output_stream(dyos);
-
-
             
-            memcpy(image_dxy, image_gaussian, width * height * sizeof(pixel_t));
+            derivatives_t image_dxy[width * height];
+            memset(image_dxy, 0, width * height * sizeof(derivatives_t));
 
             //#pragma omp parallel for
             for (int i = 0; i < width * height; i++) {
-                image_dxy[i] = (pixel_t)hypot(image_dx[i], image_dy[i]);
+                image_dxy[i] = (derivatives_t)hypot(image_dx[i], image_dy[i]);
             }
 
+            const clock_t dxy_write_begin_time = clock();
+            ostream& dxyos = create_output_stream(derivatives_xy_output);
+            //writes ppm image
+            dxyos << "P6\n" << width << " " << height << "\n255\n";
+            for (int i = width * height - 1; i >= 0; i--) {
+                dxyos << (unsigned char)image_dxy[i];
+                dxyos << (unsigned char)image_dxy[i];
+                dxyos << (unsigned char)image_dxy[i];
+            }
+
+            if (isDebug) {
+                cerr << "Derivative XY filter writing time: " << float(clock () - dxy_write_begin_time) /  CLOCKS_PER_SEC << endl;
+            }
+
+            delete_output_stream(dxyos);
+
+
             //non-maximum suppression
-            pixel_t nms[width * height];            
+            derivatives_t nms[width * height];            
             //#pragma omp parallel for
             for (int i = 0; i < width * height; i++) {
                 const int nn = i - width;
@@ -343,7 +385,7 @@ void exampleMain(unsigned char tmin, unsigned char tmax) {
                 const int sw = ss + 1;
                 const int se = ss - 1;
 
-                const float dir = (float)(fmod(atan2(image_dy[i], image_dx[i]) + M_PI, M_PI) / M_PI) * 8;
+                const double dir = (fmod(atan2(image_dy[i], image_dx[i]) + M_PI, M_PI) / M_PI) * 8;
                 if (((dir <= 1 || dir > 7) && image_dxy[i] > image_dxy[ee] && image_dxy[i] > image_dxy[ww]) || // 0 deg
                     ((dir > 1 && dir <= 3) && image_dxy[i] > image_dxy[nw] && image_dxy[i] > image_dxy[se]) || // 45 deg
                     ((dir > 3 && dir <= 5) && image_dxy[i] > image_dxy[nn] && image_dxy[i] > image_dxy[ss]) || // 90 deg
@@ -354,6 +396,23 @@ void exampleMain(unsigned char tmin, unsigned char tmax) {
                     nms[i] = 0;
                 }                
             }
+
+            const clock_t nms_write_begin_time = clock();
+            ostream& nmsos = create_output_stream(suppression_output);
+            //writes ppm image
+            nmsos << "P6\n" << width << " " << height << "\n255\n";
+            for (int i = width * height - 1; i >= 0; i--) {
+                nmsos << (unsigned char)nms[i];
+                nmsos << (unsigned char)nms[i];
+                nmsos << (unsigned char)nms[i];
+            }
+
+            if (isDebug) {
+                cerr << "Non-maximum suppression writing time: " << float(clock () - nms_write_begin_time) /  CLOCKS_PER_SEC << endl;
+            }
+
+            delete_output_stream(nmsos);
+
 
             //hysteresis
             //Reuse array, used as a stack of coordinates. width*height/4 elements should be enough
@@ -412,9 +471,9 @@ void exampleMain(unsigned char tmin, unsigned char tmax) {
             os << out[i];
             os << (unsigned char)0;
         } else {
-            os << image_gaussian[i];
-            os << image_gaussian[i];
-            os << image_gaussian[i];
+            os << image[i];
+            os << image[i];
+            os << image[i];
         }
     }
 
@@ -458,13 +517,17 @@ int main(int argc, char *argv[]) {
     gaussian_output = (string)readValue(GAUSSIAN_OUTPUT, GAUSSIAN_OUTPUT_DEF);
     derivatives_x_output = (string)readValue(DERIVATIVES_X_OUTPUT, DERIVATIVES_X_OUTPUT_DEF);
     derivatives_y_output = (string)readValue(DERIVATIVES_Y_OUTPUT, DERIVATIVES_Y_OUTPUT_DEF);
+    derivatives_xy_output = (string)readValue(DERIVATIVES_XY_OUTPUT, DERIVATIVES_XY_OUTPUT_DEF);
+    suppression_output = (string)readValue(SUPPRESSION_OUTPUT, SUPPRESSION_OUTPUT_DEF);
+    int hmin = readValue(HYSTERESIS_MIN, HYSTERESIS_MIN_DEF);
+    int hmax = readValue(HYSTERESIS_MAX, HYSTERESIS_MAX_DEF);
 
     const bool isHelp = readValue(HELP, false);
     if (isHelp) printHelp();
     
 
     if (!example.compare(EXAMPLE_MAIN)) {
-        exampleMain(50, 45);
+        exampleMain(hmin, hmax);
     } else if (!example.compare(EXAMPLE_BOOST)) {
         exampleBoost();
     } else {
