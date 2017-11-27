@@ -37,53 +37,16 @@ void example_harris() {
 
             // borders are -0.5 0.5: -128 to 128, -2, 2: -512 to 512
             const double dx[] = {-2, 2};
-            const double dy[] = {2, -2};
-            //double dx[] = {-1, 0, 1,
-            //               -2, 0, 2,
-            //               -1, 0, 1};
-            //double dy[] = { 1, 2, 1,
-            //                0, 0, 0,
-            //               -1,-2,-1};
-
             derivatives_t image_dx[width * height];
             memset(image_dx, 0, width * height * sizeof(derivatives_t));
-            convolution<pixel_t, derivatives_t>(image, image_dx, width, height, dx, 2, 1);
-            const clock_t dx_write_begin_time = clock();
-            ostream& dxos = create_output_stream(derivatives_x_output);
+            auto dxfilter = convolution_filter(derivatives_x_output, dx, 2, 1);
+            dxfilter.do_process(image, image_dx, width, height);
 
-            //writes ppm image
-            dxos << "P6\n" << width << " " << height << "\n255\n";
-            for (int i = width * height - 1; i >= 0; i--) {
-                dxos << (unsigned char)(image_dx[i] + 127);
-                dxos << (unsigned char)(image_dx[i] + 127);
-                dxos << (unsigned char)(image_dx[i] + 127);
-            }
-
-            if (is_debug) {
-                cerr << "Derivative X filter writing time: " << float(clock () - dx_write_begin_time) /  CLOCKS_PER_SEC << endl;
-            }
-
-            delete_output_stream(dxos);
-
+            const double dy[] = {2, -2};
             derivatives_t image_dy[width * height];
             memset(image_dy, 0, width * height * sizeof(derivatives_t));
-            convolution<pixel_t, derivatives_t>(image, image_dy, width, height, dy, 1, 2);
-            const clock_t dy_write_begin_time = clock();
-            ostream& dyos = create_output_stream(derivatives_y_output);
-
-            //writes ppm image
-            dyos << "P6\n" << width << " " << height << "\n255\n";
-            for (int i = width * height - 1; i >= 0; i--) {
-                dyos << (unsigned char)(image_dy[i] + 127);
-                dyos << (unsigned char)(image_dy[i] + 127);
-                dyos << (unsigned char)(image_dy[i] + 127);
-            }
-
-            if (is_debug) {
-                cerr << "Derivative Y filter writing time: " << float(clock () - dy_write_begin_time) /  CLOCKS_PER_SEC << endl;
-            }
-
-            delete_output_stream(dyos);
+            auto dyfilter = convolution_filter(derivatives_y_output, dx, 1, 2);
+            dyfilter.do_process(image, image_dy, width, height);
             
             derivatives_t image_dxy[width * height];
             memset(image_dxy, 0, width * height * sizeof(derivatives_t));

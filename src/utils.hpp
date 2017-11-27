@@ -185,6 +185,23 @@ private:
     int size;
 };
 
+class convolution_filter: public image_filter<pixel_t, derivatives_t> {
+public:
+    gaussian_filter(string output_name, double[] conv, int conv_x, int conv_y): image_filter(output_name), conv(conv), size(size) {
+        log << "Convolution filter: convolution, size: " << convolution << ", " << size << endl;
+    }
+
+protected:
+    void process(const pixel_t *in, derivatives_t *out, int width, int height) {
+        convolution<pixel_t, derivatives_t>(in, out, width, height, conv, conv_x, conv_y);
+    }
+
+private:
+    double[] conv;
+    int conv_x;
+    int conv_y;
+};
+
 return_proxy read_value(map<string, string> argmap, string name, auto def_val) {
     if (argmap.count(name)) {
         if (typeid(def_val) == typeid(int)) {
