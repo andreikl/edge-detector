@@ -35,29 +35,32 @@ void example_canny(unsigned char tmin, unsigned char tmax) {
         if (k == frames - 1) {
             const clock_t calc_begin_time = clock();
             
-            auto gfilter = gaussian_filter(gaussian_output, 0.8, 5);
+            auto gfilter = gaussian_filter<pixel_t, pixel_t>(gaussian_output, 0.8, 5);
             memcpy(image_gaussian, image, width * height * sizeof(pixel_t));
             gfilter.do_process(image, image_gaussian, width, height);
             
             //contrast_filter(image_gaussian, width, height);
 
-            // borders are -0.5 0.5: -128 to 128, -2, 2: -512 to 512
+            
+            //sobel matrix
             /*double dx[] = {-1, 0, 1,
                            -2, 0, 2,
                            -1, 0, 1};*/
-            const double dx[] = {-2, 2};
+            // borders are -0.5 0.5: -128 to 128, -2, 2: -512 to 512
+            const double *dx = new double[2] {-2, 2};
             derivatives_t image_dx[width * height];
             memset(image_dx, 0, width * height * sizeof(derivatives_t));
             auto dxfilter = convolution_filter(derivatives_x_output, dx, 2, 1);
             dxfilter.do_process(image_gaussian, image_dx, width, height);
 
+            //sobel matrix
             /*double dy[] = { 1, 2, 1,
                             0, 0, 0,
                            -1,-2,-1};*/
-            const double dy[] = {2, -2};
+            const double *dy = new double[2] {2, -2};
             derivatives_t image_dy[width * height];
             memset(image_dy, 0, width * height * sizeof(derivatives_t));
-            auto dyfilter = convolution_filter(derivatives_y_output, dx, 1, 2);
+            auto dyfilter = convolution_filter(derivatives_y_output, dy, 1, 2);
             dyfilter.do_process(image_gaussian, image_dy, width, height);
             
             derivatives_t image_dxy[width * height];

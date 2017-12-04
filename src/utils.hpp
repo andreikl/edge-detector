@@ -4,6 +4,7 @@
 #include <typeinfo>                          // typeid
 #include <iostream>                          // ostream
 #include <streambuf>                         // streambuf
+#include <memory>                            // auto_ptr
 #include <map>
 
 typedef unsigned char pixel_t;
@@ -14,7 +15,9 @@ using namespace std;
 
 ostream& create_output_stream(string name);
 void delete_output_stream(ostream& os);
-template<typename T_IN, typename T_OUT> void convolution(const T_IN *in, T_OUT *out, int width, int height, const double *kernel, int kwidth, int kheight) {
+
+template<typename T_IN, typename T_OUT>
+void convolution(const T_IN *in, T_OUT *out, int width, int height, const double *kernel, int kwidth, int kheight) {
     int kwidthhalf = kwidth / 2;
     int kwidthmodulo = kwidth % 2;
     int kheighthalf = kheight / 2;
@@ -93,7 +96,8 @@ public:
     int overflow(int c) { return c; }
 };
 
-template<typename T_IN, typename T_OUT> class image_filter {
+template<typename T_IN, typename T_OUT>
+class image_filter {
 protected:
     image_filter(string output_name): output_name(output_name), log(create_output_stream("log")) {
     }
@@ -110,7 +114,7 @@ protected:
 
     virtual void process(const T_IN *in, T_OUT *out, int width, int height) = 0;
 
-    void process_after(const T_IN *out, int width, int height) {
+    void process_after(const T_OUT *out, int width, int height) {
         log << typeid(this).name() <<  " filter process time: " << float(clock () - start_time) /  CLOCKS_PER_SEC << endl;
         
         start_time = clock();
@@ -141,15 +145,15 @@ protected:
     clock_t start_time;
 };
 
-//void gaussian_filter(const pixel_t *in, pixel_t *out, int width, int height, double sigma, int size);
-class gaussian_filter: public image_filter<pixel_t, pixel_t> {
+template<typename T_IN, typename T_OUT>
+class gaussian_filter: public image_filter<T_IN, T_OUT> {
 public:
-    gaussian_filter(string output_name, double sigma, int size): image_filter(output_name), sigma(sigma), size(size) {
-        log << "Gaussian filter: sigma, size: " << sigma << ", " << size << endl;
+    gaussian_filter(string output_name, double sigma, int size): image_filter<T_IN, T_OUT>::image_filter(output_name), sigma(sigma), size(size) {
+        image_filter<T_IN, T_OUT>::log << "Gaussian filter: sigma, size: " << sigma << ", " << size << endl;
     }
 
 protected:
-    void process(const pixel_t *in, pixel_t *out, int width, int height) {
+    void process(const T_IN *in, T_OUT *out, int width, int height) {
         double kernel[size * size];
         double mean = size / 2.0;
         double sum = 0.0;
@@ -162,7 +166,7 @@ protected:
                             / (2 * M_PI * sigma * sigma);
                 sum += kernel[c];
 
-                log << i << ", " << j << ": " << kernel[c] << endl;
+                image_filter<T_IN, T_OUT>::log << i << ", " << j << ": " << kernel[c] << endl;
 
                 c++;
             }
@@ -172,12 +176,12 @@ protected:
             kernel[i] /= sum;
         }
 
-        log << "Gaussian filter preparation: " << float(clock() - start_time) /  CLOCKS_PER_SEC << endl;
+        image_filter<T_IN, T_OUT>::log << "Gaussian filter preparation: " << float(clock() - image_filter<T_IN, T_OUT>::start_time) /  CLOCKS_PER_SEC << endl;
 
         // reset start time
-        start_time = clock();
+        image_filter<T_IN, T_OUT>::start_time = clock();
 
-        convolution<pixel_t, pixel_t>(in, out, width, height, kernel, size, size);
+        convolution<T_IN, T_OUT>(in, out, width, height, kernel, size, size);
     }
 
 private:
@@ -187,19 +191,19 @@ private:
 
 class convolution_filter: public image_filter<pixel_t, derivatives_t> {
 public:
-    gaussian_filter(string output_name, double[] conv, int conv_x, int conv_y): image_filter(output_name), conv(conv), size(size) {
-        log << "Convolution filter: convolution, size: " << convolution << ", " << size << endl;
+    convolution_filter(string output_name, const double conv[], int size_x, int size_y): image_filter(output_name), conv(conv), size_x(size_x), size_y(size_y) {
+        log << "Convolution filter: convolution, size: " << conv << ", " << size_x << ", " << size_y << endl;
     }
 
 protected:
     void process(const pixel_t *in, derivatives_t *out, int width, int height) {
-        convolution<pixel_t, derivatives_t>(in, out, width, height, conv, conv_x, conv_y);
+        convolution<pixel_t, derivatives_t>(in, out, width, height, conv.get(), size_x, size_y);
     }
 
 private:
-    double[] conv;
-    int conv_x;
-    int conv_y;
+    unique_ptr<const double> conv;
+    int size_x;
+    int size_y;
 };
 
 return_proxy read_value(map<string, string> argmap, string name, auto def_val) {
