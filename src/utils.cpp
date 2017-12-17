@@ -7,6 +7,7 @@
 #include "utils.hpp"
 
 extern bool is_debug;
+extern int debug_point;
 
 ostream& create_output_stream(string name) {
     if (!name.compare("-")) {

@@ -8,18 +8,22 @@
 using namespace std;
 
 extern bool is_debug;
+extern int debug_x;
+extern int debug_y;
 extern int width;
 extern int height;
 extern int frames;
 
 extern string derivatives_x_output;
+extern string derivatives_xx_output;
 extern string derivatives_y_output;
+extern string derivatives_yy_output;
 extern string derivatives_xy_output;
 extern string suppression_output;
 extern string gaussian_output;
 extern string output;
 
-void example_harris() {
+void example_harris(double hk, int hr) {
     // converts input parameters to variables
     pixel_t image[width * height];
     pixel_t image_gaussian[width * height];
@@ -62,25 +66,46 @@ void example_harris() {
                 image_dxy[i] = image_dx[i] * image_dy[i];
             }
 
-            auto gfilterdxx = gaussian_filter<derivatives_t, derivatives_t>("null", 1, 5);
-            derivatives_t image_gaussian_dxx[width * height];
-            memset(image_gaussian_dxx, 0, width * height * sizeof(derivatives_t));
-            gfilterdxx.do_process(image_dxx, image_gaussian_dxx, width, height);
+            auto gfilterdxx = gaussian_filter<derivatives_t, derivatives_t>(derivatives_xx_output, 1.0, 5, is_debug, debug_x, debug_y);
+            unique_ptr<derivatives_t> image_gaussian_dxx(new derivatives_t[width * height]);
+            derivatives_t* image_gaussian_dxx_ptr = image_gaussian_dxx.get();
+            memset(image_gaussian_dxx_ptr, 0, width * height * sizeof(derivatives_t));
+            gfilterdxx.do_process(image_dxx, image_gaussian_dxx_ptr, width, height);
 
-            auto gfilterdyy = gaussian_filter<derivatives_t, derivatives_t>("null", 1, 5);
-            derivatives_t image_gaussian_dyy[width * height];
-            memset(image_gaussian_dyy, 0, width * height * sizeof(derivatives_t));
-            gfilterdyy.do_process(image_dyy, image_gaussian_dyy, width, height);
+            auto gfilterdyy = gaussian_filter<derivatives_t, derivatives_t>(derivatives_yy_output, 1.0, 5, is_debug, debug_x, debug_y);
+            unique_ptr<derivatives_t> image_gaussian_dyy(new derivatives_t[width * height]);
+            derivatives_t* image_gaussian_dyy_ptr = image_gaussian_dyy.get();
+            memset(image_gaussian_dyy_ptr, 0, width * height * sizeof(derivatives_t));
+            gfilterdyy.do_process(image_dyy, image_gaussian_dyy_ptr, width, height);
 
-            auto gfilterdxy = gaussian_filter<derivatives_t, derivatives_t>("null", 1, 5);
-            derivatives_t image_gaussian_dxy[width * height];
-            memset(image_gaussian_dxy, 0, width * height * sizeof(derivatives_t));
-            gfilterdxy.do_process(image_dxy, image_gaussian_dxy, width, height);
+            auto gfilterdxy = gaussian_filter<derivatives_t, derivatives_t>(derivatives_xy_output, 1.0, 5, is_debug, debug_x, debug_y);
+            unique_ptr<derivatives_t> image_gaussian_dxy(new derivatives_t[width * height]);
+            derivatives_t* image_gaussian_dxy_ptr = image_gaussian_dxy.get();
+            memset(image_gaussian_dxy_ptr, 0, width * height * sizeof(derivatives_t));
+            gfilterdxy.do_process(image_dxy, image_gaussian_dxy_ptr, width, height);
+
+            //unique_ptr<derivatives_t> R(new derivatives_t[width * height]);
+            
+            
+            
+            for (int i = 0; i < width * height; i++) {
+                //iy2 * ix2 - pow(ixiy, 2)
+                int det = (int)image_gaussian_dxx_ptr[i] * (int)image_gaussian_dyy_ptr[i] - (int)image_gaussian_dxy_ptr[i] * (int)image_gaussian_dxy_ptr[i];
+                int trace = image_gaussian_dxx_ptr[i] + image_gaussian_dyy_ptr[i];
+                int R = det - hk * trace * trace;
+                if (is_debug && i % width == debug_x && i / width == debug_y) {
+                    int test = image_gaussian_dxy_ptr[i];
+                    cerr << "i: " << i << ", test: " << test << endl;
+                    cerr << "image_gaussian_dxx: " << image_gaussian_dxx_ptr[i] << ", image_gaussian_dyy: " << image_gaussian_dyy_ptr[i] << ", image_gaussian_dxy: " << image_gaussian_dxy_ptr[i] << endl;
+                    cerr << "R: " << R << ", det: " << det << ", trace: " << hk * trace * trace << endl;
+                }
+                out[i] = (R > hr)? MAX_BRIGHTNESS: 0;
+            }
 
             //non-maximum suppression
-            derivatives_t nms[width * height];            
+            //derivatives_t nms[width * height];            
             //#pragma omp parallel for
-            for (int i = 0; i < width * height; i++) {
+            /*for (int i = 0; i < width * height; i++) {
                 const int nn = i - width;
                 const int ss = i + width;
                 const int ww = i + 1;
@@ -100,23 +125,7 @@ void example_harris() {
                 else {
                     nms[i] = 0;
                 }                
-            }
-
-            const clock_t nms_write_begin_time = clock();
-            ostream& nmsos = create_output_stream(suppression_output);
-            //writes ppm image
-            nmsos << "P6\n" << width << " " << height << "\n255\n";
-            for (int i = width * height - 1; i >= 0; i--) {
-                nmsos << (unsigned char)nms[i];
-                nmsos << (unsigned char)nms[i];
-                nmsos << (unsigned char)nms[i];
-            }
-
-            if (is_debug) {
-                cerr << "Non-maximum suppression writing time: " << float(clock () - nms_write_begin_time) /  CLOCKS_PER_SEC << endl;
-            }
-
-            delete_output_stream(nmsos);
+            }*/
 
             if (is_debug) {
                 cerr << "Calculation time: " << float(clock () - calc_begin_time) /  CLOCKS_PER_SEC << endl;
@@ -129,15 +138,9 @@ void example_harris() {
     //writes ppm image
     os << "P6\n" << width << " " << height << "\n255\n";
     for (int i = width * height - 1; i >= 0; i--) {
-        if (out[i] == MAX_BRIGHTNESS) {
-            os << out[i];
-            os << out[i];
-            os << (unsigned char)0;
-        } else {
-            os << image[i];
-            os << image[i];
-            os << image[i];
-        }
+        os << out[i];
+        os << out[i];
+        os << out[i];
     }
 
     if (is_debug) {

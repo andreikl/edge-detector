@@ -1,1 +1,1 @@
-void example_harris();
+void example_harris(double k, int r);
