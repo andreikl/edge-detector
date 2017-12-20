@@ -61,7 +61,7 @@ const int HYSTERESIS_MAX_DEF = 50;
 const string HARRIS_K = "-hk";
 const double HARRIS_K_DEF = 0.04;
 const string HARRIS_R = "-hr";
-const int HARRIS_R_DEF = 20000;
+const int HARRIS_R_DEF = 99000;
 
 void print_help() {
     cout << "edge-detector [options]" << endl;

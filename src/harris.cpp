@@ -99,7 +99,7 @@ void example_harris(double hk, int hr) {
                     cerr << "image_gaussian_dxx: " << image_gaussian_dxx_ptr[i] << ", image_gaussian_dyy: " << image_gaussian_dyy_ptr[i] << ", image_gaussian_dxy: " << image_gaussian_dxy_ptr[i] << endl;
                     cerr << "R: " << R << ", det: " << det << ", trace: " << hk * trace * trace << endl;
                 }
-                out[i] = (R > hr)? MAX_BRIGHTNESS: 0;
+                out[i] = (R > hr)? MAX_BRIGHTNESS: (unsigned char)0;
             }
 
             //non-maximum suppression
@@ -138,9 +138,15 @@ void example_harris(double hk, int hr) {
     //writes ppm image
     os << "P6\n" << width << " " << height << "\n255\n";
     for (int i = width * height - 1; i >= 0; i--) {
-        os << out[i];
-        os << out[i];
-        os << out[i];
+        if (out[i] == MAX_BRIGHTNESS) {
+            os << (unsigned char)MAX_BRIGHTNESS;
+            os << (unsigned char)MAX_BRIGHTNESS;
+            os << (unsigned char)0;
+        } else {
+            os << image[i];
+            os << image[i];
+            os << image[i];
+        }
     }
 
     if (is_debug) {
